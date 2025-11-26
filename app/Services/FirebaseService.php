@@ -13,15 +13,20 @@ class FirebaseService
 
     public function __construct()
     {
-        $credentialsPath = config('services.firebase.credentials_path');
-        
+        // Path sementara untuk JSON di storage
+        $credentialsPath = storage_path('app/firebase/firebase-key.json');
+
+        // Jika file belum ada, buat dari env
         if (!file_exists($credentialsPath)) {
-            throw new \Exception("Firebase credentials file not found at: {$credentialsPath}");
+            if (!env('FIREBASE_JSON')) {
+                throw new \Exception("Firebase JSON not set in environment variables.");
+            }
+            file_put_contents($credentialsPath, env('FIREBASE_JSON'));
         }
 
         $factory = (new Factory)
             ->withServiceAccount($credentialsPath)
-            ->withDatabaseUri('https://laravelfirebasedemo-417d7-default-rtdb.firebaseio.com');
+            ->withDatabaseUri(env('FIREBASE_DATABASE_URL', 'https://laravelfirebasedemo-417d7-default-rtdb.firebaseio.com'));
 
         $this->database = $factory->createDatabase();
         $this->messaging = $factory->createMessaging();
