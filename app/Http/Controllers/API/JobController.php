@@ -131,7 +131,7 @@ class JobController extends Controller
             // Public job - no notification needed on creation, will notify when someone applies
         } else {
             // Private order - notify the assigned worker
-            NotificationService::createNotification(
+            NotificationService::createNotificationAndPush(
                 $job->assigned_worker_id,
                 'private_order_new',
                 '📌 Pesanan Pribadi Baru',
@@ -338,7 +338,7 @@ class JobController extends Controller
         }
 
         // Notify customer about new application
-        NotificationService::createNotification(
+        NotificationService::createNotificationAndPush(
             $job->customer_id,
             'job_application',
             '📝 Ada Pekerja yang Melamar',
@@ -467,7 +467,7 @@ class JobController extends Controller
         $job->update(['status' => 'pending_completion']);
 
         // Notify customer that worker has completed the job
-        NotificationService::createNotification(
+        NotificationService::createNotificationAndPush(
             $job->customer_id,
             'job_completed',
             '⏳ Konfirmasi Penyelesaian',
@@ -522,7 +522,7 @@ class JobController extends Controller
                 \App\Services\PointsService::awardJobCompletion($job->assigned_worker_id, $rating);
             }
             
-            NotificationService::createNotification(
+            NotificationService::createNotificationAndPush(
                 $job->assigned_worker_id,
                 'job_completed',
                 '✅ Pesanan Selesai',
@@ -800,7 +800,7 @@ class JobController extends Controller
             $otherApp->update(['status' => 'rejected']);
             
             // Notify other workers that their application was rejected
-            NotificationService::createNotification(
+            NotificationService::createNotificationAndPush(
                 $otherApp->worker_id,
                 'job_rejected',
                 '❌ Lamaran Ditolak',
@@ -818,7 +818,7 @@ class JobController extends Controller
         ]);
 
         // Notify worker that their application was accepted
-        NotificationService::createNotification(
+        NotificationService::createNotificationAndPush(
             $application->worker_id,
             'job_accepted',
             '✅ Lamaran Diterima',
@@ -861,7 +861,7 @@ class JobController extends Controller
         $application->update(['status' => 'rejected']);
 
         // Notify worker that their application was rejected
-        NotificationService::createNotification(
+        NotificationService::createNotificationAndPush(
             $application->worker_id,
             'job_rejected',
             '❌ Lamaran Ditolak',
@@ -944,7 +944,7 @@ class JobController extends Controller
 
                 $workerApplication->update(['status' => 'cancelled']);
 
-                NotificationService::createNotification(
+                NotificationService::createNotificationAndPush(
                     $job->customer_id,
                     'job_application_cancelled',
                     'Lamaran Dibatalkan',
@@ -989,7 +989,7 @@ class JobController extends Controller
 
         // Notify worker if job was assigned
         if ($job->assigned_worker_id && $isCustomer) {
-            NotificationService::createNotification(
+            NotificationService::createNotificationAndPush(
                 $job->assigned_worker_id,
                 'job_cancelled',
                 '❌ Pesanan Dibatalkan',
@@ -1002,7 +1002,7 @@ class JobController extends Controller
 
         // Notify customer if worker cancelled
         if ($isWorker) {
-            NotificationService::createNotification(
+            NotificationService::createNotificationAndPush(
                 $job->customer_id,
                 'job_cancelled',
                 '❌ Pesanan Dibatalkan',
@@ -1070,7 +1070,7 @@ class JobController extends Controller
         ]);
 
         // Notify customer that private order was accepted
-        NotificationService::createNotification(
+        NotificationService::createNotificationAndPush(
             $job->customer_id,
             'private_order_accepted',
             '✅ Pesanan Pribadi Diterima',
@@ -1137,7 +1137,7 @@ class JobController extends Controller
         ]);
 
         // Notify customer that private order was rejected
-        NotificationService::createNotification(
+        NotificationService::createNotificationAndPush(
             $job->customer_id,
             'private_order_rejected',
             '❌ Pesanan Pribadi Ditolak',

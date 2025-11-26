@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'firebase' => [
+        'credentials_path' => __DIR__ . '/../storage/app/firebase/firebase_credentials.json',
+        'fcm_server_key' => env('FCM_SERVER_KEY'),
+    ],
+
 ];

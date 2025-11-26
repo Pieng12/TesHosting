@@ -12,6 +12,7 @@ use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\AddressController;
 use App\Http\Controllers\API\AdminController;
+use App\Http\Controllers\API\FcmTokenController;
 use App\Http\Controllers\API\BanComplaintController;
 
 // Public routes (no authentication required)
@@ -98,6 +99,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/mark-read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+    
+    // TEST ENDPOINTS untuk testing notifikasi via Postman
+    Route::post('/notifications/test', [NotificationController::class, 'testNotification']);
+    Route::post('/notifications/test-job', [NotificationController::class, 'testJobNotification']);
+
+    // FCM token route
+    Route::post('/fcm/token', [FcmTokenController::class, 'update']);
     
     // Address routes
     Route::get('/addresses', [AddressController::class, 'index']);

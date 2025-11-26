@@ -81,3 +81,4 @@ php artisan db:seed --class=JobReviewSeeder
 - Private orders langsung di-assign, tidak melalui aplikasi
 - Completed jobs memiliki assigned_worker_id
 
+

@@ -93,3 +93,4 @@ class JobApplicationSeeder extends Seeder
     }
 }
 
+

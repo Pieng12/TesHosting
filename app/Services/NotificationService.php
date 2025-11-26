@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Notification;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 
 class NotificationService
@@ -30,6 +31,50 @@ class NotificationService
             'related_id' => $relatedId,
             'data' => $data,
         ]);
+    }
+
+    /**
+     * Create notification and send push via FCM if user has fcm_token
+     */
+    public static function createNotificationAndPush(
+        int $userId,
+        string $type,
+        string $title,
+        string $body,
+        ?string $relatedType = null,
+        ?int $relatedId = null,
+        ?array $data = null
+    ): Notification {
+        $notification = self::createNotification(
+            $userId,
+            $type,
+            $title,
+            $body,
+            $relatedType,
+            $relatedId,
+            $data
+        );
+
+        $user = User::find($userId);
+        if ($user && $user->fcm_token) {
+            $payloadData = $data ?? [];
+            $payloadData['type'] = $type;
+            if ($relatedType !== null) {
+                $payloadData['related_type'] = $relatedType;
+            }
+            if ($relatedId !== null) {
+                $payloadData['related_id'] = $relatedId;
+            }
+
+            self::sendFcmNotification(
+                $user->fcm_token,
+                $title,
+                $body,
+                $payloadData
+            );
+        }
+
+        return $notification;
     }
 
     /**
@@ -64,6 +109,107 @@ class NotificationService
 
         if (!empty($notifications)) {
             Notification::insert($notifications);
+        }
+    }
+
+    /**
+     * Send push notification via Firebase Cloud Messaging
+     */
+    public static function sendFcmNotification(
+        string $fcmToken,
+        string $title,
+        string $body,
+        ?array $data = null
+    ): void {
+        if (!$fcmToken) {
+            \Log::error('FCM token kosong');
+            return;
+        }
+
+        // Prefer HTTP v1 using service account (kreait/firebase-php)
+        try {
+            $firebaseService = app(\App\Services\FirebaseService::class);
+            $messaging = $firebaseService->getMessaging();
+
+            $payloadData = $data ?? [];
+            $payloadData['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
+
+            $message = \Kreait\Firebase\Messaging\CloudMessage::withTarget('token', $fcmToken)
+                ->withNotification(\Kreait\Firebase\Messaging\Notification::create($title, $body))
+                ->withData($payloadData)
+                ->withAndroidConfig(\Kreait\Firebase\Messaging\AndroidConfig::fromArray([
+                    'priority' => 'high',
+                    'notification' => [
+                        'sound' => 'default',
+                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                    ],
+                ]));
+
+            $messaging->send($message);
+
+            \Log::info('FCM notification sent via HTTP v1', [
+                'fcm_token' => substr($fcmToken, 0, 20) . '...',
+                'title' => $title,
+            ]);
+            return;
+
+        } catch (\Kreait\Firebase\Exception\MessagingException $e) {
+            \Log::error('FCM messaging exception (v1)', [
+                'error' => $e->getMessage(),
+                'fcm_token' => substr($fcmToken, 0, 20) . '...',
+            ]);
+            // Fall through to optional legacy fallback below
+        } catch (\Throwable $e) {
+            \Log::error('FCM push exception (v1)', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'fcm_token' => substr($fcmToken, 0, 20) . '...',
+            ]);
+            // Fall through to optional legacy fallback below
+        }
+
+        // Optional fallback: if legacy server key still exists, use it
+        $serverKey = config('services.firebase.fcm_server_key');
+        if ($serverKey) {
+            try {
+                $payload = [
+                    'to' => $fcmToken,
+                    'priority' => 'high',
+                    'notification' => [
+                        'title' => $title,
+                        'body' => $body,
+                        'sound' => 'default',
+                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                    ],
+                    'data' => $payloadData,
+                ];
+
+                $response = Http::withHeaders([
+                    'Authorization' => 'key=' . $serverKey,
+                    'Content-Type' => 'application/json',
+                ])->post('https://fcm.googleapis.com/fcm/send', $payload);
+
+                if ($response->successful()) {
+                    \Log::info('FCM notification sent via legacy key', [
+                        'fcm_token' => substr($fcmToken, 0, 20) . '...',
+                        'title' => $title,
+                    ]);
+                } else {
+                    \Log::error('FCM push failed (legacy)', [
+                        'status' => $response->status(),
+                        'response' => $response->body(),
+                        'fcm_token' => substr($fcmToken, 0, 20) . '...',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                \Log::error('FCM push exception (legacy)', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'fcm_token' => substr($fcmToken, 0, 20) . '...',
+                ]);
+            }
+        } else {
+            \Log::warning('No legacy server key available; message not sent after v1 failure');
         }
     }
 

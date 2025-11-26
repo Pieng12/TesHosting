@@ -45,6 +45,7 @@ class User extends Authenticatable
         'banned_until',
         'ban_reason',
         'last_banned_by',
+        'fcm_token',
     ];
 
     /**

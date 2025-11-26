@@ -120,6 +120,119 @@ class NotificationController extends Controller
             'message' => 'Notification deleted successfully'
         ]);
     }
+
+    /**
+     * TEST ENDPOINT: Trigger test notification (untuk testing via Postman)
+     * Endpoint ini untuk testing notifikasi push FCM
+     * 
+     * Cara pakai:
+     * 1. Login dulu untuk dapat token
+     * 2. Panggil endpoint ini dengan token di header
+     * 3. Notifikasi akan dikirim ke user yang sedang login
+     */
+    public function testNotification(Request $request)
+    {
+        $user = Auth::user();
+        
+        $request->validate([
+            'title' => 'nullable|string|max:255',
+            'body' => 'nullable|string',
+            'type' => 'nullable|string',
+        ]);
+
+        $title = $request->input('title', '🧪 Test Notifikasi');
+        $body = $request->input('body', 'Ini adalah notifikasi test dari Postman!');
+        $type = $request->input('type', 'system');
+
+        // Cek apakah user punya FCM token
+        if (empty($user->fcm_token)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User tidak memiliki FCM token. Pastikan user sudah login di aplikasi Flutter.',
+                'data' => [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'fcm_token_exists' => false,
+                ]
+            ], 400);
+        }
+
+        // NOTE: Prefer HTTP v1 (service account) — do not block test endpoint
+        // if legacy `FCM_SERVER_KEY` is not set. The NotificationService will
+        // attempt HTTP v1 first and only fallback to legacy key when available.
+        $serverKey = config('services.firebase.fcm_server_key');
+        $serverKeyExists = !empty($serverKey);
+
+        // Kirim notifikasi dengan push FCM
+        NotificationService::createNotificationAndPush(
+            $user->id,
+            $type,
+            $title,
+            $body,
+            null,
+            null,
+            ['test' => true, 'timestamp' => now()->toISOString()]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Test notification sent! Cek log Laravel untuk detail.',
+            'data' => [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'fcm_token_exists' => true,
+                'fcm_token_preview' => substr($user->fcm_token, 0, 20) . '...',
+                'server_key_exists' => $serverKeyExists,
+                'notification' => [
+                    'title' => $title,
+                    'body' => $body,
+                    'type' => $type,
+                ],
+                'note' => 'Cek log Laravel (storage/logs/laravel.log) untuk melihat apakah FCM berhasil dikirim atau ada error.'
+            ]
+        ]);
+    }
+
+    /**
+     * TEST ENDPOINT: Simulasi notifikasi pesanan baru (untuk testing)
+     * Endpoint ini mensimulasikan ketika ada user lain yang membuat pesanan
+     */
+    public function testJobNotification(Request $request)
+    {
+        $user = Auth::user();
+        
+        $request->validate([
+            'job_title' => 'nullable|string|max:255',
+        ]);
+
+        $jobTitle = $request->input('job_title', 'Bersihkan Rumah 3 Kamar');
+
+        // Simulasi notifikasi "Ada pekerja yang melamar"
+        NotificationService::createNotificationAndPush(
+            $user->id,
+            'job_application',
+            '📝 Ada Pekerja yang Melamar',
+            "Ada pekerja mengajukan diri untuk pekerjaan \"{$jobTitle}\"",
+            'job',
+            999, // fake job ID untuk testing
+            ['job_id' => 999, 'job_title' => $jobTitle, 'test' => true]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Test job notification sent!',
+            'data' => [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'fcm_token_exists' => !empty($user->fcm_token),
+                'notification' => [
+                    'type' => 'job_application',
+                    'title' => '📝 Ada Pekerja yang Melamar',
+                    'body' => "Ada pekerja mengajukan diri untuk pekerjaan \"{$jobTitle}\"",
+                ]
+            ]
+        ]);
+    }
 }
 
 
