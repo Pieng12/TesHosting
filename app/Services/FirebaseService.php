@@ -14,12 +14,34 @@ class FirebaseService
         $credentialsPath = storage_path('app/firebase/firebase-key.json');
 
         if (!file_exists($credentialsPath)) {
-            if (!env('FIREBASE_JSON')) {
+
+            $firebaseJson = env('FIREBASE_JSON');
+
+            if (!$firebaseJson) {
                 throw new \Exception("Firebase JSON not set in environment variables.");
             }
-            file_put_contents($credentialsPath, env('FIREBASE_JSON'));
+
+            // Buat folder jika belum ada
+            $dir = storage_path('app/firebase');
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+
+            // Convert escaped JSON → array
+            $decoded = json_decode($firebaseJson, true);
+
+            if (!$decoded) {
+                throw new \Exception("Invalid FIREBASE_JSON format.");
+            }
+
+            // Simpan sebagai file JSON yang rapi (fungsi penting untuk private_key)
+            file_put_contents(
+                $credentialsPath,
+                json_encode($decoded, JSON_PRETTY_PRINT)
+            );
         }
 
+        // Load Firebase
         $factory = (new Factory)
             ->withServiceAccount($credentialsPath);
 
