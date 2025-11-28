@@ -146,10 +146,10 @@ class AdminController extends Controller
                 'user_id' => $user->id,
                 'admin_id' => $request->user()->id,
                 'banned_from' => now(),
-                'banned_until' => $banUntil,
+                'banned_until' => $banUntil, // null for permanent ban
                 'reason' => $request->reason,
                 'metadata' => [
-                    'duration_days' => $request->duration_days,
+                    'duration_days' => $isPermanent ? null : $request->duration_days,
                     'is_permanent' => $isPermanent,
                 ],
             ]);
