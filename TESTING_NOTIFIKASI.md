@@ -246,3 +246,4 @@ php artisan tinker
 >>> \App\Services\NotificationService::sendFcmNotification('FCM_TOKEN_DISINI', 'Test', 'Body test');
 ```
 
+
