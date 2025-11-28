@@ -185,7 +185,13 @@ class User extends Authenticatable
             return false;
         }
 
-        if ($this->banned_until && now()->greaterThan($this->banned_until)) {
+        // If banned_until is null, it's a permanent ban
+        if ($this->banned_until === null) {
+            return true;
+        }
+
+        // If banned_until has passed, auto-clear the ban
+        if (now()->greaterThan($this->banned_until)) {
             $this->clearBan();
             return false;
         }

@@ -86,15 +86,23 @@ class AuthController extends Controller
         }
 
         $user = User::where('email', $request->email)->firstOrFail();
+        
+        // Refresh user to get latest ban status and auto-clear if expired
+        $user->refresh();
 
         if ($user->isCurrentlyBanned()) {
             $latestComplaint = BanComplaint::where('user_id', $user->id)
                 ->latest()
                 ->first();
+            
+            // Check if ban is permanent (banned_until is null)
+            $banMessage = $user->banned_until 
+                ? 'Akun Anda sedang diblokir hingga ' . $user->banned_until->format('d M Y H:i') . '.'
+                : 'Akun Anda diblokir permanen.';
 
             return response()->json([
                 'success' => false,
-                'message' => 'Akun Anda sedang diblokir hingga ' . optional($user->banned_until)->format('d M Y H:i') . '.',
+                'message' => $banMessage,
                 'data' => [
                     'ban_reason' => $user->ban_reason,
                     'banned_until' => $user->banned_until,

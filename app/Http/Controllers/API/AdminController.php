@@ -90,6 +90,7 @@ class AdminController extends Controller
         $validator = Validator::make($request->all(), [
             'duration_days' => 'nullable|integer|min:1|max:365',
             'banned_until' => 'nullable|date|after:now',
+            'is_permanent' => 'nullable|boolean',
             'reason' => 'required|string|min:10',
         ]);
 
@@ -101,10 +102,13 @@ class AdminController extends Controller
             ], 422);
         }
 
-        if (!$request->filled('duration_days') && !$request->filled('banned_until')) {
+        $isPermanent = $request->boolean('is_permanent', false);
+
+        // If not permanent, require duration or banned_until
+        if (!$isPermanent && !$request->filled('duration_days') && !$request->filled('banned_until')) {
             return response()->json([
                 'success' => false,
-                'message' => 'Harap tentukan durasi ban atau tanggal berakhir.',
+                'message' => 'Harap tentukan durasi ban, tanggal berakhir, atau pilih ban permanen.',
             ], 422);
         }
 
@@ -122,11 +126,14 @@ class AdminController extends Controller
             ], 403);
         }
 
-        $banUntil = $request->filled('banned_until')
-            ? Carbon::parse($request->banned_until)
-            : now()->addDays($request->duration_days);
+        // If permanent, set banned_until to null
+        $banUntil = $isPermanent 
+            ? null 
+            : ($request->filled('banned_until')
+                ? Carbon::parse($request->banned_until)
+                : now()->addDays($request->duration_days));
 
-        DB::transaction(function () use ($user, $request, $banUntil) {
+        DB::transaction(function () use ($user, $request, $banUntil, $isPermanent) {
             $user->update([
                 'is_banned' => true,
                 'ban_started_at' => now(),
@@ -143,6 +150,7 @@ class AdminController extends Controller
                 'reason' => $request->reason,
                 'metadata' => [
                     'duration_days' => $request->duration_days,
+                    'is_permanent' => $isPermanent,
                 ],
             ]);
 
@@ -156,19 +164,25 @@ class AdminController extends Controller
                 'reason' => $request->reason,
                 'metadata' => [
                     'banned_until' => $banUntil,
+                    'is_permanent' => $isPermanent,
                 ],
             ]);
         });
+
+        $banMessage = $isPermanent
+            ? "Akun Anda diblokir permanen karena: {$request->reason}"
+            : "Akun Anda diblokir hingga {$banUntil->format('d M Y H:i')} karena: {$request->reason}";
 
         NotificationService::createNotification(
             $user->id,
             'admin_ban',
             'Akun Anda Diblokir',
-            "Akun Anda diblokir hingga {$banUntil->format('d M Y H:i')} karena: {$request->reason}",
+            $banMessage,
             'user',
             $user->id,
             [
                 'banned_until' => $banUntil,
+                'is_permanent' => $isPermanent,
                 'reason' => $request->reason,
             ]
         );
