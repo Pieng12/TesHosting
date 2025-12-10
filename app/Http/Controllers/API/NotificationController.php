@@ -145,14 +145,21 @@ class NotificationController extends Controller
         $type = $request->input('type', 'system');
 
         // Cek apakah user punya FCM token
-        if (empty($user->fcm_token)) {
+        $hasLegacyToken = !empty($user->fcm_token);
+        $hasDeviceTokens = false;
+        if (method_exists($user, 'activeDeviceTokens')) {
+            $hasDeviceTokens = $user->activeDeviceTokens()->exists();
+        }
+
+        if (! $hasLegacyToken && ! $hasDeviceTokens) {
             return response()->json([
                 'success' => false,
-                'message' => 'User tidak memiliki FCM token. Pastikan user sudah login di aplikasi Flutter.',
+                'message' => 'User tidak memiliki FCM token. Pastikan user sudah login di aplikasi Flutter dan token perangkat terdaftar.',
                 'data' => [
                     'user_id' => $user->id,
                     'user_name' => $user->name,
                     'fcm_token_exists' => false,
+                    'device_tokens_count' => $hasDeviceTokens ? $user->activeDeviceTokens()->count() : 0,
                 ]
             ], 400);
         }

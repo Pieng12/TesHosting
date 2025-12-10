@@ -11,7 +11,7 @@ class FirebaseService
 
     public function __construct()
     {
-        $credentialsPath = storage_path('app/firebase/firebase-key.json');
+        $credentialsPath = config('services.firebase.credentials_path');
 
         if (!file_exists($credentialsPath)) {
 

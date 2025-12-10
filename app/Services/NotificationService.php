@@ -34,7 +34,8 @@ class NotificationService
     }
 
     /**
-     * Create notification and send push via FCM if user has fcm_token
+     * Create notification and send push via FCM if user has active device tokens
+     * FIXED: Sekarang mengirim ke semua active device tokens, bukan hanya 1 token
      */
     public static function createNotificationAndPush(
         int $userId,
@@ -56,22 +57,33 @@ class NotificationService
         );
 
         $user = User::find($userId);
-        if ($user && $user->fcm_token) {
-            $payloadData = $data ?? [];
-            $payloadData['type'] = $type;
-            if ($relatedType !== null) {
-                $payloadData['related_type'] = $relatedType;
-            }
-            if ($relatedId !== null) {
-                $payloadData['related_id'] = $relatedId;
-            }
+        if ($user) {
+            // Get all active device tokens untuk user ini
+            $deviceTokens = $user->activeDeviceTokens()->get();
+            
+            if ($deviceTokens->isNotEmpty()) {
+                $payloadData = $data ?? [];
+                $payloadData['type'] = $type;
+                if ($relatedType !== null) {
+                    $payloadData['related_type'] = $relatedType;
+                }
+                if ($relatedId !== null) {
+                    $payloadData['related_id'] = $relatedId;
+                }
 
-            self::sendFcmNotification(
-                $user->fcm_token,
-                $title,
-                $body,
-                $payloadData
-            );
+                // Kirim ke setiap active device
+                foreach ($deviceTokens as $deviceToken) {
+                    self::sendFcmNotification(
+                        $deviceToken->fcm_token,
+                        $title,
+                        $body,
+                        $payloadData
+                    );
+                    
+                    // Update last_used_at untuk tracking
+                    $deviceToken->updateLastUsed();
+                }
+            }
         }
 
         return $notification;

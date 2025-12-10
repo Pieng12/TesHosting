@@ -22,6 +22,13 @@ Route::group([], function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    // Route for password reset link from email (redirects to Flutter app)
+    Route::get('/reset-password', function (Request $request) {
+        $email = $request->input('email');
+        $token = $request->input('token');
+        $frontendUrl = 'yourapp://reset-password?token=' . $token . '&email=' . $email;
+        return redirect()->to($frontendUrl);
+    })->name('password.reset');
     
     // Public leaderboard
     Route::get('/leaderboard-public', [LeaderboardController::class, 'index']);
@@ -104,8 +111,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/test', [NotificationController::class, 'testNotification']);
     Route::post('/notifications/test-job', [NotificationController::class, 'testJobNotification']);
 
-    // FCM token route
+    // FCM token routes
     Route::post('/fcm/token', [FcmTokenController::class, 'update']);
+    Route::get('/fcm/tokens', [FcmTokenController::class, 'getDeviceTokens']);
+    Route::delete('/fcm/tokens/{tokenId}', [FcmTokenController::class, 'removeDeviceToken']);
+    Route::post('/fcm/tokens/deactivate-others', [FcmTokenController::class, 'deactivateOtherDevices']);
     
     // Address routes
     Route::get('/addresses', [AddressController::class, 'index']);

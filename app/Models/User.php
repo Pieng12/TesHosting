@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Notifications\ResetPasswordNotification; // Added this use statement
 
 class User extends Authenticatable
 {
@@ -158,6 +159,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Get device tokens for this user
+     */
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
+    /**
+     * Get active device tokens for this user
+     */
+    public function activeDeviceTokens()
+    {
+        return $this->deviceTokens()->where('is_active', true);
+    }
+
+    /**
      * Calculate and update rating based on received reviews
      */
     public function updateRating()
@@ -210,5 +227,16 @@ class User extends Authenticatable
         $this->ban_reason = null;
         $this->last_banned_by = null;
         $this->save();
+    }
+
+    /**
+     * Send the password reset notification.
+     *
+     * @param  string  $token
+     * @return void
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 }

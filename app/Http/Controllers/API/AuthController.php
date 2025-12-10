@@ -5,10 +5,13 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\BanComplaint;
+use App\Models\DeviceToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -131,10 +134,26 @@ class AuthController extends Controller
     }
 
     /**
-     * Logout user
+     * Logout user dari device tertentu
+     * FIXED: Sekarang deactivate device token juga agar notifikasi tidak dikirim ke device ini lagi
      */
     public function logout(Request $request)
     {
+        $user = $request->user();
+        $fcmToken = $request->input('fcm_token'); // FCM token dari device yang logout
+        
+        // Deactivate device token jika ada
+        if ($fcmToken) {
+            $deviceToken = DeviceToken::where('user_id', $user->id)
+                ->where('fcm_token', $fcmToken)
+                ->first();
+            
+            if ($deviceToken) {
+                $deviceToken->deactivate();
+            }
+        }
+        
+        // Delete API token
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
@@ -209,6 +228,73 @@ class AuthController extends Controller
     }
 
     /**
+     * Send a reset link to the given user.
+     */
+    public function forgotPassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), ['email' => 'required|email']);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => 'Validation error', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            // We will send the password reset link to this user. Once we have the
+            // token, we can redirect the user back to where they came from with
+            // a fresh password reset token and notification.
+            $response = Password::sendResetLink($request->only('email'));
+
+            if ($response == Password::RESET_LINK_SENT) {
+                return response()->json(['success' => true, 'message' => 'Link reset password telah dikirim ke email Anda!']);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Gagal mengirim link reset password. Pastikan email terdaftar.'], 400);
+        } catch (ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation error', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            \Log::error('Forgot password error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Terjadi kesalahan pada server. Silakan coba lagi.'], 500);
+        }
+    }
+
+    /**
+     * Reset the given user's password.
+     */
+    public function resetPassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'token' => 'required',
+            'password' => 'required|confirmed|min:8',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => 'Validation error', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            // Here we will attempt to reset the user's password. If it is successful we
+            // will update the password on an actual user model and persist it to
+            // the database. Otherwise we will parse the error and return it.
+            $response = Password::reset($request->all(), function (User $user, string $password) {
+                $user->password = Hash::make($password);
+                $user->save();
+            });
+
+            if ($response == Password::PASSWORD_RESET) {
+                return response()->json(['success' => true, 'message' => 'Password Anda telah berhasil direset!']);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Gagal mereset password. Token reset tidak valid atau telah kadaluarsa.'], 400);
+        } catch (ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation error', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            \Log::error('Reset password error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Terjadi kesalahan pada server. Silakan coba lagi.'], 500);
+        }
+    }
+
+    /**
      * Get all active sessions (tokens)
      */
     public function getActiveSessions(Request $request)
@@ -236,6 +322,7 @@ class AuthController extends Controller
 
     /**
      * Logout from all devices
+     * FIXED: Sekarang deactivate semua device tokens
      */
     public function logoutAll(Request $request)
     {
@@ -244,10 +331,13 @@ class AuthController extends Controller
         // Delete all tokens except current one
         $currentToken = $request->user()->currentAccessToken();
         $user->tokens()->where('id', '!=', $currentToken->id)->delete();
+        
+        // Deactivate all device tokens
+        DeviceToken::where('user_id', $user->id)->update(['is_active' => false]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Logged out from all other devices successfully'
+            'message' => 'Logged out from all devices successfully'
         ]);
     }
 
