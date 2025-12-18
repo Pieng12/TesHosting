@@ -26,7 +26,7 @@ Route::group([], function () {
     Route::get('/reset-password', function (Request $request) {
         $email = $request->input('email');
         $token = $request->input('token');
-        $frontendUrl = 'yourapp://reset-password?token=' . $token . '&email=' . $email;
+        $frontendUrl = 'servify://reset-password?token=' . $token . '&email=' . $email;
         return redirect()->to($frontendUrl);
     })->name('password.reset');
     
